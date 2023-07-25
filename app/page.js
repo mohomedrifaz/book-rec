@@ -1,113 +1,251 @@
+'use client'
+
 import Image from 'next/image'
+import { useState, useEffect } from 'react'
 
 export default function Home() {
+
+  const [bookName, setBookName] = useState('');
+  const [bookAuthor, setBookAuthor] = useState('');
+  const [bookData, setBookData] = useState(null);
+  const [suggestedBooks, setSuggestedBooks] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+  const [selectedBookThumbnail, setSelectedBookThumbnail] = useState(null);
+
+  const [otherBooks, setOtherBooks] = useState([]);
+
+
+  const debounce = (fn, delay) => {
+    let timer;
+    return function (...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        fn.apply(this, args);
+      }, delay);
+    };
+  };
+
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      try {
+        const response = await fetch(
+          `https://www.googleapis.com/books/v1/volumes?q=${bookName}&key=AIzaSyAxxpq_0aweUInshI1dAccLaJRMa77s7kI`,
+          {
+            headers: {
+              accept: 'application/json',
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Network Error')
+        }
+
+        const data = await response.json();
+        if (data.items && data.items.length > 0) {
+          setSuggestedBooks(data.items.map((item) => ({
+            id: item.id,
+            title: item.volumeInfo.title,
+            authors: item.volumeInfo.authors,
+            thumbnail: item.volumeInfo.imageLinks?.thumbnail,
+          })));
+        } else {
+          setSuggestedBooks([]);
+        }
+      } catch (error) {
+        console.log(suggestedBooks)
+        console.log('error is', error);
+      }
+    };
+
+    const debounceFetchSuggestions = debounce(fetchSuggestions, 300);
+
+    if (bookName.trim() !== '') {
+      debounceFetchSuggestions();
+    } else {
+      setSuggestedBooks([]);
+    }
+  }, [bookName]);
+
+  async function fetchBookData(bookId) {
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/books/v1/volumes/${bookId}?key=AIzaSyAxxpq_0aweUInshI1dAccLaJRMa77s7kI`,
+        {
+          headers: {
+            accept: 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Network Error')
+      }
+
+      const data = await response.json();
+      setBookAuthor(data.volumeInfo?.authors[0]);
+      setBookData(data);
+      setShowSuggestions(false);
+      setSelectedBookThumbnail(data.volumeInfo?.imageLinks?.thumbnail);
+      console.log(data);
+
+    } catch (error) {
+      console.log('error is', error)
+    }
+  }
+
+  async function fetchOtherBooks() {
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/books/v1/volumes/?q=inauthor:"${bookAuthor}"&maxResults=5&key=AIzaSyAxxpq_0aweUInshI1dAccLaJRMa77s7kI`,
+        {
+          headers: {
+            accept: 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Network Error')
+      }
+
+      const data = await response.json();
+      setOtherBooks(data);
+      console.log(data);
+
+    } catch (error) {
+      console.log('error is', error)
+    }
+  }
+
+  useEffect(() => {
+    if (bookAuthor) {
+      fetchOtherBooks(bookAuthor);
+    }
+  }, [bookAuthor]);
+
+  const handleBookClick = async (bookId) => {
+    await fetchBookData(bookId);
+  };
+
+  const removeHtmlTags = (htmlString) => {
+    const regex = /(<([^>]+)>)/gi;
+    return htmlString.replace(regex, '');
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+    <main className="flex min-h-screen flex-col items-center p-24">
+    <div
+      className="absolute top-0 left-0 w-full h-full"
+      style={{
+        // backgroundImage: selectedBookThumbnail ? `url(${selectedBookThumbnail})` : '',
+        // filter: selectedBookThumbnail ? 'blur(5px)' : 'none',
+        // backgroundSize: 'cover', 
+        // backgroundPosition: 'center',
+        // zIndex: -1,
+      }}
+    />
       <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+
+        <h1 className="mb-4 text-2xl font-extrabold leading-none tracking-tight text-gray-900 md:text-3xl lg:text-4xl dark:text-white"> Book Recommendations - Demo </h1>
+      </div>
+
+      <div className="z-10 w-full gap-x-4 max-w-5xl flex-row font-mono text-sm lg:flex">
+
+        <div className="w-1/2">
+          <label className="block mb-4 text-1xl font-medium leading-none tracking-tight text-gray-900 md:text-1xl lg:text-2xl dark:text-white dark:text-white">Enter Book</label>
+          <input
+            type="text"
+            id="default-input"
+            value={bookName}
+            onChange={(e) => { setBookName(e.target.value); setShowSuggestions(true) }}
+            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+          />
+
+          {showSuggestions && suggestedBooks.length > 0 && (
+            <div className="mt-2 max-h-48 overflow-y-auto">
+              {suggestedBooks
+                .filter((book) => book.thumbnail)
+                .map((book) => (
+                  <div
+                    key={book.id}
+                    className="flex flex-row items-center cursor-pointer py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600"
+                    onClick={() => handleBookClick(book.id)}
+                  >
+                      {book.thumbnail && (
+                      <img
+                        src={book.thumbnail}
+                        alt={book.title}
+                        className="w-12 mr-2"
+                      />
+                    )}
+                    <div className="flex flex-col">
+                      <div>{book.title}</div>
+                      <div>By : {book.authors}</div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
+      <div className="z-10 w-full my-8 max-w-5xl flex-col font-mono text-sm lg:flex">
+        <h2 className="block mb-4 text-1xl font-medium leading-none tracking-tight text-gray-900 md:text-1xl lg:text-2xl dark:text-white dark:text-white">About Book</h2>
+        {bookData && bookData.volumeInfo ? (
+          <>
+            {/* Display book details */}
+            <p className="text-gray-500 mb-2 dark:text-gray-400">
+              <span className="text-gray-200 dark:text-gray-200">Title :</span> {bookData.volumeInfo.title}
+            </p>
+            <p className="text-gray-500 mb-2 dark:text-gray-400">
+              <span className="text-gray-200 dark:text-gray-200">Author :</span>  {bookData.volumeInfo.authors?.join(', ')}
+            </p>
+            <p className="text-gray-500 mb-2 dark:text-gray-400">
+              <span className="text-gray-200 dark:text-gray-200">Published Date :</span> {bookData.volumeInfo.publishedDate}
+            </p>
+            <p className="text-gray-500 mb-2 dark:text-gray-400">
+              <span className="text-gray-200 dark:text-gray-200">Description :</span> {removeHtmlTags(bookData.volumeInfo.description)}
+            </p>
+            <p className="text-gray-500 mb-8 dark:text-gray-400">
+              <span className="text-gray-200 dark:text-gray-200">Category :</span> {bookData.volumeInfo.categories?.join(', ')}
+            </p>
+
+            {/* Display book thumbnail */}
+            {bookData.volumeInfo.imageLinks && (
+              <p className="text-gray-500 mb-2 dark:text-gray-400">
+                <span className="text-gray-200 dark:text-gray-200"></span>
+                <img src={bookData.volumeInfo.imageLinks.thumbnail} alt={bookData.volumeInfo.title} />
+              </p>
+            )}
+          </>
+        ) : (
+          <p>No book information available</p>
+        )}
       </div>
 
-      <div className="mb-32 grid text-center lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
+      {otherBooks.items && otherBooks.items.length > 0 && (
+      <div className="z-10 w-full my-8 max-w-5xl flex-col font-mono text-sm lg:flex">
+        <h2 className="block mb-4 text-1xl font-medium leading-none tracking-tight text-gray-900 md:text-1xl lg:text-2xl dark:text-white dark:text-white">Other Works from the author</h2>
+          <>
+          {otherBooks.items.map((e) => (<div
+                    key={e.id}
+                    className="flex flex-row items-center cursor-pointer py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600"
+                  >
+                      {e.thumbnail && (
+                      <img
+                        src={e.thumbnail}
+                        alt={e.volumeInfo.title}
+                        className="w-12 mr-2"
+                      />
+                    )}
+                    <div className="flex flex-col">
+                      <div>{e.volumeInfo.title}</div>
+                    </div>
+                  </div>))}
+          </>
+      </div>)}
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800 hover:dark:bg-opacity-30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore the Next.js 13 playground.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
     </main>
   )
 }
